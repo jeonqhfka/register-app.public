@@ -13,7 +13,7 @@ const params = new URLSearchParams(window.location.search);
 const registerId = params.get("id");
 
 let registerData = null;
-let preListEntries = [];   // 아직 서명하지 않은 사람들
+let preListEntries = [];   // 아직 서명하지 않은 사람들 (로드 시점 기준)
 let selected = null;       // { id, position, name } 또는 null(직접입력)
 let hasDrawn = false;
 let ctx, canvas, drawing = false, lastX = 0, lastY = 0;
@@ -33,9 +33,15 @@ async function init() {
       .filter((p) => !p.matched)
       .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
-    renderPickCard();
+    document.querySelectorAll(".sign-card").forEach((el) => {
+      el.style.borderTopColor = registerData.borderColor || "#2B5FAD";
+    });
+    $("regTitle").textContent = registerData.title || "연수등록부";
+    $("regDate").textContent = fmtDateTime(registerData.dateTime);
+    $("regLocation").textContent = registerData.location || "미정";
+
     $("loadingState").style.display = "none";
-    $("pickCard").style.display = "block";
+    $("mainCard").style.display = "block";
   } catch (err) {
     console.error(err);
     showError();
@@ -63,21 +69,18 @@ function escapeHtml(str) {
   }[c]));
 }
 
-/* ---------------- 1단계: 명단 선택 ---------------- */
+/* ---------------- 검색 & 선택 ---------------- */
 
-function renderPickCard() {
-  document.querySelectorAll(".sign-card").forEach((el) => {
-    el.style.borderTopColor = registerData.borderColor || "#2B5FAD";
-  });
-  $("regTitle").textContent = registerData.title || "연수등록부";
-  $("regDate").textContent = fmtDateTime(registerData.dateTime);
-  $("regLocation").textContent = registerData.location || "미정";
-  renderPickList(preListEntries);
-}
-
-function renderPickList(list) {
+function renderPickList(list, kw) {
   const wrap = $("pickList");
   wrap.innerHTML = "";
+
+  if (!kw) {
+    $("pickHint").style.display = "block";
+    $("pickEmpty").style.display = "none";
+    return;
+  }
+  $("pickHint").style.display = "none";
   $("pickEmpty").style.display = list.length ? "none" : "block";
 
   list.forEach((p) => {
@@ -97,33 +100,33 @@ function renderPickList(list) {
 
 $("pickSearch").addEventListener("input", (e) => {
   const kw = e.target.value.trim();
-  if (!kw) { renderPickList(preListEntries); return; }
+  if (!kw) { renderPickList([], ""); return; }
   const filtered = preListEntries.filter((p) => (p.name || "").includes(kw));
-  renderPickList(filtered);
+  renderPickList(filtered, kw);
 });
 
 $("manualEntryLink").addEventListener("click", (e) => {
   e.preventDefault();
   selected = null;
-  goToSignStep();
+  openSignSection();
 });
 
 function selectPerson(p) {
   selected = p;
-  goToSignStep();
+  openSignSection();
 }
 
 $("backToListLink").addEventListener("click", (e) => {
   e.preventDefault();
-  $("signCard").style.display = "none";
-  $("pickCard").style.display = "block";
+  $("signSection").style.display = "none";
+  $("searchSection").style.display = "block";
 });
 
-/* ---------------- 2단계: 서명 ---------------- */
+/* ---------------- 서명 영역 펼치기 ---------------- */
 
-function goToSignStep() {
-  $("pickCard").style.display = "none";
-  $("signCard").style.display = "block";
+function openSignSection() {
+  $("searchSection").style.display = "none";
+  $("signSection").style.display = "block";
 
   if (selected) {
     $("manualFields").style.display = "none";
@@ -137,8 +140,10 @@ function goToSignStep() {
     $("inName").value = "";
   }
 
-  // 화면이 실제로 보이게 된 '다음 프레임'에 캔버스 크기를 잡아야
-  // getBoundingClientRect가 올바른 값을 반환합니다 (숨겨진 상태에서 재면 0이 나옴).
+  $("signSection").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // 화면에 실제로 보이게 된 다음 프레임에 캔버스 크기를 잡아야
+  // getBoundingClientRect가 올바른 값을 반환합니다.
   requestAnimationFrame(setupCanvas);
 }
 
@@ -194,7 +199,7 @@ $("clearSigBtn").addEventListener("click", () => {
   hasDrawn = false;
 });
 
-/* ---------------- 제출 ---------------- */
+/* ---------------- 제출 (제출 직전 중복서명 재확인) ---------------- */
 
 $("submitBtn").addEventListener("click", async () => {
   const errEl = $("signError");
@@ -222,9 +227,22 @@ $("submitBtn").addEventListener("click", async () => {
   }
 
   $("submitBtn").disabled = true;
-  $("submitBtn").textContent = "제출 중...";
+  $("submitBtn").textContent = "확인 중...";
 
   try {
+    // 명단에서 고른 경우, 그 사이에 다른 기기로 이미 서명했는지 서버에서 다시 확인
+    if (preListId) {
+      const freshSnap = await getDoc(doc(db, "registers", registerId, "preList", preListId));
+      if (freshSnap.exists() && freshSnap.data().matched) {
+        errEl.textContent = "이미 서명이 완료된 참석자입니다. 다른 사람인가요? 목록으로 돌아가 확인해주세요.";
+        errEl.classList.add("show");
+        $("submitBtn").disabled = false;
+        $("submitBtn").textContent = "서명 완료";
+        return;
+      }
+    }
+
+    $("submitBtn").textContent = "제출 중...";
     const signatureDataUrl = canvas.toDataURL("image/png");
     await addDoc(collection(db, "registers", registerId, "attendees"), {
       position, name,
@@ -234,16 +252,17 @@ $("submitBtn").addEventListener("click", async () => {
       signedAt: serverTimestamp()
     });
 
-    // 명단에서 선택했다면, 그 사람은 목록에서 빠지도록 표시
     if (preListId) {
       try {
         await updateDoc(doc(db, "registers", registerId, "preList", preListId), { matched: true });
       } catch (e) {
         // 표시 실패해도 서명 자체는 이미 저장됐으므로 무시
       }
+      // 로컬 목록에서도 제거해 같은 세션에서 재검색해도 다시 안 나오게 함
+      preListEntries = preListEntries.filter((p) => p.id !== preListId);
     }
 
-    $("signCard").style.display = "none";
+    $("mainCard").style.display = "none";
     $("doneCard").style.display = "block";
     $("doneSummary").textContent = `${registerData.title || ""} — ${position} ${name}님`;
   } catch (err) {
