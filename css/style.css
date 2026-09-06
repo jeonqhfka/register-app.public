@@ -442,6 +442,7 @@ table.attendee-table img.sig-thumb {
   body * { visibility: hidden; }
   #printArea, #printArea * { visibility: visible; }
   #printArea {
+    display: block !important;
     position: absolute;
     top: 0; left: 0;
     width: 100%;
