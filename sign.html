@@ -22,14 +22,67 @@
   .sign-card h1 { font-size: 19px; margin: 0 0 6px; }
   .sign-meta { font-size: 13.5px; color: var(--muted); margin-bottom: 20px; line-height: 1.7; }
   .sign-meta div { display: flex; gap: 6px; }
-  .match-hint {
-    font-size: 12.5px;
-    margin-top: -8px;
-    margin-bottom: 12px;
-    min-height: 16px;
+
+  /* 명단 선택 단계 */
+  .pick-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 14px;
   }
-  .match-hint.found { color: var(--success); font-weight: 600; }
-  .match-hint.notfound { color: var(--muted); }
+  .pick-search input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 15px;
+  }
+  .pick-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .pick-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+  }
+  .pick-item:active { background: #F0F2F5; }
+  .pick-item .name { font-weight: 700; font-size: 15.5px; }
+  .pick-item .position { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .pick-item .arrow { color: var(--muted); font-size: 18px; }
+  .pick-empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+    padding: 30px 10px;
+  }
+  .manual-link {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+  }
+
+  /* 서명 단계 */
+  .selected-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--primary-tint);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .selected-banner .who { font-weight: 700; font-size: 15.5px; }
+  .selected-banner .role { font-size: 12.5px; color: var(--muted); }
 
   .sig-label-row {
     display: flex;
@@ -46,6 +99,13 @@
     border-radius: 8px;
     touch-action: none;
     background: #FBFBFC;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: var(--muted);
   }
 
   .done-wrap {
@@ -73,29 +133,50 @@
     <p>전달받은 QR 코드나 링크를 다시 확인해주세요.</p>
   </div>
 
-  <div id="signCard" class="sign-card" style="display:none">
+  <!-- 1단계: 명단에서 본인 선택 -->
+  <div id="pickCard" class="sign-card" style="display:none">
     <h1 id="regTitle"></h1>
     <div class="sign-meta">
       <div>🗓 <span id="regDate"></span></div>
       <div>📍 <span id="regLocation"></span></div>
-      <div>🏫 <span id="regOrg"></span></div>
     </div>
 
-    <div class="field">
-      <label>소속</label>
-      <input type="text" id="inOrg" placeholder="예: OO초등학교">
+    <div class="pick-search">
+      🔍 <input type="text" id="pickSearch" placeholder="이름으로 검색">
     </div>
-    <div class="field-row">
-      <div class="field">
-        <label>직위</label>
-        <input type="text" id="inPosition" placeholder="예: 교사">
+    <div class="pick-list" id="pickList"></div>
+    <div class="pick-empty" id="pickEmpty" style="display:none">명단에서 이름을 찾을 수 없습니다.</div>
+
+    <div class="manual-link">
+      명단에 이름이 없으신가요? <a href="#" id="manualEntryLink">직접 입력하기</a>
+    </div>
+  </div>
+
+  <!-- 2단계: 서명 -->
+  <div id="signCard" class="sign-card" style="display:none">
+    <a href="#" class="back-link" id="backToListLink">← 목록으로</a>
+
+    <div class="selected-banner" id="selectedBanner" style="display:none">
+      <div>
+        <div class="who" id="selWhoName"></div>
+        <div class="role" id="selWhoPosition"></div>
       </div>
-      <div class="field">
-        <label>성명</label>
-        <input type="text" id="inName" placeholder="예: 홍길동">
+      <div>✓</div>
+    </div>
+
+    <!-- 직접 입력일 때만 보이는 입력칸 -->
+    <div id="manualFields" style="display:none">
+      <div class="field-row">
+        <div class="field">
+          <label>직위</label>
+          <input type="text" id="inPosition" placeholder="예: 교사">
+        </div>
+        <div class="field">
+          <label>성명</label>
+          <input type="text" id="inName" placeholder="예: 홍길동">
+        </div>
       </div>
     </div>
-    <div class="match-hint" id="matchHint"></div>
 
     <div class="sig-label-row">
       <label>전자서명</label>
