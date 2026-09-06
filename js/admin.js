@@ -279,7 +279,7 @@ function parsePreListText(text) {
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/\t|,/).map((p) => p.trim());
-      return { org: parts[0] || "", position: parts[1] || "", name: parts[2] || "" };
+      return { position: parts[0] || "", name: parts[1] || "" };
     })
     .filter((p) => p.name);
 }
@@ -291,8 +291,8 @@ $("preListTextarea").addEventListener("input", (e) => {
   preview.style.display = "block";
   preview.innerHTML = `
     <table>
-      <thead><tr><th>소속</th><th>직위</th><th>성명</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr><td>${escapeHtml(r.org)}</td><td>${escapeHtml(r.position)}</td><td>${escapeHtml(r.name)}</td></tr>`).join("")}</tbody>
+      <thead><tr><th>직위</th><th>성명</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${escapeHtml(r.position)}</td><td>${escapeHtml(r.name)}</td></tr>`).join("")}</tbody>
     </table>
   `;
 });
@@ -364,12 +364,11 @@ async function openAttendeeModal(r) {
   const rows = snap.docs.map((d) => d.data());
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6">아직 서명한 참석자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5">아직 서명한 참석자가 없습니다.</td></tr>`;
   } else {
     tbody.innerHTML = rows.map((a, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td class="name-cell">${escapeHtml(a.org)}</td>
         <td>${escapeHtml(a.position)}</td>
         <td class="name-cell">${escapeHtml(a.name)}${a.matched ? '<span class="badge-matched">명단확인</span>' : ""}</td>
         <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : ""}</td>
