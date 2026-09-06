@@ -116,10 +116,21 @@ onAuthStateChanged(auth, (user) => {
 /* ---------------- registers: load & render ---------------- */
 
 async function loadRegisters() {
-  const q = query(collection(db, "registers"), where("ownerUid", "==", currentUser.uid), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  allRegisters = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  renderRegisters(allRegisters);
+  try {
+    // where절만 사용 (orderBy를 함께 쓰면 Firestore 복합 색인이 필요해서, 정렬은 아래서 직접 처리)
+    const q = query(collection(db, "registers"), where("ownerUid", "==", currentUser.uid));
+    const snap = await getDocs(q);
+    allRegisters = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    allRegisters.sort((a, b) => {
+      const at = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const bt = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return bt - at;
+    });
+    renderRegisters(allRegisters);
+  } catch (err) {
+    showToast("목록을 불러오지 못했습니다: " + err.message);
+    console.error(err);
+  }
 }
 
 function renderRegisters(list) {
