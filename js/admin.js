@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, query, where, orderBy, writeBatch, serverTimestamp
+  getDocs, getDoc, query, where, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -352,35 +352,75 @@ $("downloadQrBtn").addEventListener("click", () => {
 
 /* ---------------- attendees / PDF ---------------- */
 
+// 출력물에서 직위 순서를 이 배열 순서대로 고정합니다. 필요하면 이 목록만 바꾸면 돼요.
+const POSITION_ORDER = [
+  "교장", "교감", "수석교사", "교사",
+  "교무행정사", "전문상담사", "원어민교사",
+  "행정실장", "행정과장", "행정계장", "주무관"
+];
+function positionRank(position) {
+  const idx = POSITION_ORDER.indexOf((position || "").trim());
+  return idx === -1 ? POSITION_ORDER.length : idx;
+}
+function sortAttendeesForOutput(rows) {
+  return [...rows].sort((a, b) => {
+    const ra = positionRank(a.position), rb = positionRank(b.position);
+    if (ra !== rb) return ra - rb;
+    return (a.name || "").localeCompare(b.name || "", "ko");
+  });
+}
+
 async function openAttendeeModal(r) {
   activeRegisterId = r.id;
   $("attendeeModalTitle").textContent = `📋 ${r.title} — 참석자 명단`;
   const tbody = $("attendeeTbody");
-  tbody.innerHTML = `<tr><td colspan="6">불러오는 중...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="4">불러오는 중...</td></tr>`;
   openModal("attendeeModalBackdrop");
 
-  const q = query(collection(db, "registers", r.id, "attendees"), orderBy("signedAt", "asc"));
-  const snap = await getDocs(q);
-  const rows = snap.docs.map((d) => d.data());
+  const snap = await getDocs(collection(db, "registers", r.id, "attendees"));
+  const rows = sortAttendeesForOutput(snap.docs.map((d) => d.data()));
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5">아직 서명한 참석자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4">아직 서명한 참석자가 없습니다.</td></tr>`;
   } else {
     tbody.innerHTML = rows.map((a, i) => `
       <tr>
         <td>${i + 1}</td>
         <td>${escapeHtml(a.position)}</td>
-        <td class="name-cell">${escapeHtml(a.name)}${a.matched ? '<span class="badge-matched">명단확인</span>' : ""}</td>
+        <td class="name-cell">${escapeHtml(a.name)}</td>
         <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : ""}</td>
-        <td>${a.signedAt && a.signedAt.toDate ? fmtDateTime(a.signedAt.toDate().toISOString()) : ""}</td>
       </tr>
     `).join("");
   }
 
-  // 인쇄용 데이터 준비
+  // 인쇄용 데이터 준비 (여러 단으로 나눠 한 페이지에 담기)
   $("printTitle").textContent = r.title || "";
   $("printMeta").textContent = `${r.org || ""}  |  ${fmtDateTime(r.dateTime)}  |  ${r.location || ""}  |  총 ${rows.length}명`;
-  $("printTbody").innerHTML = tbody.innerHTML;
+
+  const numCols = rows.length > 70 ? 3 : rows.length > 25 ? 2 : 1;
+  const perCol = Math.max(1, Math.ceil(rows.length / numCols));
+  const colsHtml = [];
+  for (let c = 0; c < numCols; c++) {
+    const colRows = rows.slice(c * perCol, (c + 1) * perCol);
+    const startIdx = c * perCol;
+    const rowsHtml = colRows.map((a, i) => `
+      <tr>
+        <td>${startIdx + i + 1}</td>
+        <td>${escapeHtml(a.position)}</td>
+        <td class="name-cell">${escapeHtml(a.name)}</td>
+        <td>${a.signature ? `<img class="sig-thumb-print" src="${a.signature}">` : ""}</td>
+      </tr>
+    `).join("");
+    colsHtml.push(`
+      <table class="print-mini-table">
+        <thead><tr><th>순</th><th>직위</th><th>성명</th><th>서명</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `);
+  }
+  const printColumnsEl = $("printColumns");
+  printColumnsEl.className = `print-columns cols-${numCols}`;
+  printColumnsEl.innerHTML = colsHtml.join("");
 }
 
 $("printBtn").addEventListener("click", () => {
