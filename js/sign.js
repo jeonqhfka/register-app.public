@@ -13,8 +13,10 @@ const params = new URLSearchParams(window.location.search);
 const registerId = params.get("id");
 
 let registerData = null;
-let preListEntries = [];   // 아직 서명하지 않은 사람들 (로드 시점 기준)
+let allPreListEntries = [];  // 명단 전체 (서명 여부 무관, 중복 방지 검사용)
+let preListEntries = [];     // 아직 서명하지 않은 사람들만 (검색 목록용)
 let selected = null;       // { id, position, name } 또는 null(직접입력)
+let manualSubmittedNames = []; // 이번 세션에서 직접입력으로 이미 제출한 이름 (재제출 방지)
 let hasDrawn = false;
 let ctx, canvas, drawing = false, lastX = 0, lastY = 0;
 
@@ -28,8 +30,8 @@ async function init() {
     registerData = snap.data();
 
     const preListSnap = await getDocs(collection(db, "registers", registerId, "preList"));
-    preListEntries = preListSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+    allPreListEntries = preListSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    preListEntries = allPreListEntries
       .filter((p) => !p.matched)
       .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
@@ -218,6 +220,18 @@ $("submitBtn").addEventListener("click", async () => {
       errEl.classList.add("show");
       return;
     }
+    // 직접 입력으로 이미 명단에 있는 이름을 다시 써서 중복 서명하는 것을 방지
+    const alreadyInList = allPreListEntries.some((p) => (p.name || "").trim() === name);
+    if (alreadyInList) {
+      errEl.textContent = "명단에 이미 등록된 이름입니다. 위로 스크롤해서 검색으로 본인을 찾아 선택해주세요.";
+      errEl.classList.add("show");
+      return;
+    }
+    if (manualSubmittedNames.includes(name)) {
+      errEl.textContent = "이미 서명을 제출한 이름입니다.";
+      errEl.classList.add("show");
+      return;
+    }
   }
 
   if (!hasDrawn) {
@@ -260,6 +274,8 @@ $("submitBtn").addEventListener("click", async () => {
       }
       // 로컬 목록에서도 제거해 같은 세션에서 재검색해도 다시 안 나오게 함
       preListEntries = preListEntries.filter((p) => p.id !== preListId);
+    } else {
+      manualSubmittedNames.push(name);
     }
 
     $("mainCard").style.display = "none";
