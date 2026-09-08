@@ -2,7 +2,8 @@ import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut, updateProfile
+  createUserWithEmailAndPassword, signOut, updateProfile,
+  setPersistence, inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
@@ -12,6 +13,10 @@ import {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// 새로고침/재접속 시 자동 로그인되지 않도록, 로그인 상태를 브라우저에 저장하지 않고
+// 현재 탭의 메모리에서만 유지합니다. (새로고침하면 다시 로그인해야 함)
+setPersistence(auth, inMemoryPersistence).catch((err) => console.error(err));
 
 const BASE_URL = window.location.href.replace(/index\.html.*$/, "").replace(/\?.*$/, "");
 
