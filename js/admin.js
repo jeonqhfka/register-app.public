@@ -413,7 +413,7 @@ async function openAttendeeModal(r) {
         <td>${i + 1}</td>
         <td>${escapeHtml(a.position)}</td>
         <td class="name-cell">${escapeHtml(a.name)}</td>
-        <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : '<span style="color:var(--muted); font-size:12px;">미서명</span>'}</td>
+        <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : '<span class="no-sig">미서명</span>'}</td>
       </tr>
     `).join("");
   }
