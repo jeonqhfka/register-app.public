@@ -413,6 +413,15 @@ table.attendee-table img.sig-thumb {
   border-radius: 4px;
   margin-left: 4px;
 }
+.no-sig {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* ---------- toast ---------- */
 
