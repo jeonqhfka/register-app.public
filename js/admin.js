@@ -377,25 +377,50 @@ async function openAttendeeModal(r) {
   tbody.innerHTML = `<tr><td colspan="4">불러오는 중...</td></tr>`;
   openModal("attendeeModalBackdrop");
 
-  const snap = await getDocs(collection(db, "registers", r.id, "attendees"));
-  const rows = sortAttendeesForOutput(snap.docs.map((d) => d.data()));
+  const [attendeeSnap, preListSnap] = await Promise.all([
+    getDocs(collection(db, "registers", r.id, "attendees")),
+    getDocs(collection(db, "registers", r.id, "preList")),
+  ]);
+  const attendees = attendeeSnap.docs.map((d) => d.data());
+  const preList = preListSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  // preList의 각 사람마다 서명 기록이 있으면 붙이고, 없으면 서명 없이 표시
+  const attendeeByPreListId = new Map();
+  attendees.forEach((a) => { if (a.preListId) attendeeByPreListId.set(a.preListId, a); });
+
+  const fromPreList = preList.map((p) => {
+    const matchedAttendee = attendeeByPreListId.get(p.id);
+    return {
+      position: p.position,
+      name: p.name,
+      signature: matchedAttendee ? matchedAttendee.signature : null,
+      signed: !!matchedAttendee,
+    };
+  });
+  // 명단에는 없지만 '직접 입력'으로 서명한 사람들도 함께 표시
+  const manualExtras = attendees
+    .filter((a) => !a.preListId)
+    .map((a) => ({ position: a.position, name: a.name, signature: a.signature, signed: true }));
+
+  const rows = sortAttendeesForOutput([...fromPreList, ...manualExtras]);
+  const signedCount = rows.filter((a) => a.signed).length;
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="4">아직 서명한 참석자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4">등록된 명단이 없습니다.</td></tr>`;
   } else {
     tbody.innerHTML = rows.map((a, i) => `
       <tr>
         <td>${i + 1}</td>
         <td>${escapeHtml(a.position)}</td>
         <td class="name-cell">${escapeHtml(a.name)}</td>
-        <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : ""}</td>
+        <td>${a.signature ? `<img class="sig-thumb" src="${a.signature}">` : '<span style="color:var(--muted); font-size:12px;">미서명</span>'}</td>
       </tr>
     `).join("");
   }
 
   // 인쇄용 데이터 준비 (여러 단으로 나눠 한 페이지에 담기)
   $("printTitle").textContent = r.title || "";
-  $("printMeta").textContent = `${r.org || ""}  |  ${fmtDateTime(r.dateTime)}  |  ${r.location || ""}  |  총 ${rows.length}명`;
+  $("printMeta").textContent = `${r.org || ""}  |  ${fmtDateTime(r.dateTime)}  |  ${r.location || ""}  |  총 ${rows.length}명 (서명 ${signedCount}명)`;
 
   const numCols = rows.length > 70 ? 3 : rows.length > 25 ? 2 : 1;
   const perCol = Math.max(1, Math.ceil(rows.length / numCols));
